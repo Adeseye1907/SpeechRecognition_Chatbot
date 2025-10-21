@@ -1,1 +1,7 @@
-streamlit pandas numpy nltk scikit-learn SpeechRecognition pyaudio
+streamlit
+pandas
+numpy
+nltk
+scikit-learn
+SpeechRecognition
+pyaudio
