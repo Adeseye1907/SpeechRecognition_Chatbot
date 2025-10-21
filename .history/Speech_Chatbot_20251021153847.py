@@ -20,8 +20,10 @@ from nltk.stem import WordNetLemmatizer # This is fine
 # ============================
 nltk_packages = [
     "punkt",
+    "punkt_tab",
     "stopwords",
-    "wordnet"
+    "wordnet",
+    "omw-1.4"
 ]
 
 # ========================================================================

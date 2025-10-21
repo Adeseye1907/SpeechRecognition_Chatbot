@@ -1,64 +1,34 @@
 # --- Import Required Libraries ---
 import streamlit as st
 import pandas as pd
-import numpy as np # <-- MISSING
+import numpy as np
 import nltk
-import os
-import random # <-- MISSING
-import time # <-- MISSING
-import ssl # <-- MISSING (Needed for the fix below)
+import random
+import time
 import speech_recognition as sr
-from sklearn.feature_extraction.text import TfidfVectorizer # <-- MISSING
-from sklearn.metrics.pairwise import cosine_similarity # <-- MISSING
-from nltk.tokenize import word_tokenize # This is fine
-from nltk.corpus import stopwords # This is fine
-from nltk.stem import WordNetLemmatizer # This is fine
-# from nltk.tokenize import sent_tokenize # Optional: You can import this too
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from nltk.stem import WordNetLemmatizer
 
-# ============================
-# 1. Ensure Required NLTK Data is Available
-# ============================
-nltk_packages = [
-    "punkt",
-    "stopwords",
-    "wordnet"
-]
-
-# ========================================================================
-# 1. FIX: Consolidated and Corrected NLTK Downloads for Deployment
-# ========================================================================
-# Temporarily bypass SSL verification to prevent download failures on some cloud environments
+# --- Download NLTK Resources (CRITICAL for deployment) ---
+# Use a try/except or force download to ensure resources are available
 try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-
-# Force the downloads of the actual required packages
-try:
-    # 'punkt' for sent_tokenize/word_tokenize
-    nltk.download('punkt', quiet=True, force=True) 
-    
-    # 'wordnet' and 'omw-1.4' for WordNetLemmatizer
-    nltk.download('wordnet', quiet=True, force=True)
-    nltk.download('omw-1.4', quiet=True, force=True) 
-    
-    # 'stopwords' for filtering (if you use it)
-    nltk.download('stopwords', quiet=True, force=True)
-    
-except Exception as e:
-    st.error(f"🚨 NLTK Download Failed: {e}")
-    st.stop()
+    nltk.download('punkt', quiet=True)
+    nltk.download('wordnet', quiet=True)
+except LookupError:
+    # Fallback in case initial quiet download fails or runs too late
+    nltk.download('punkt', quiet=True)
+    nltk.download('wordnet', quiet=True)
 
 # --- Initialize Lemmatizer ---
 lemmatizer = WordNetLemmatizer()
+
 # --- Load and Prepare Data ---
 # Ensure 'Samsung Dialog.txt' is in the same directory as this script.
 try:
     data = pd.read_csv('Samsung Dialog.txt', sep=':', header=None, names=['Speaker', 'Line'])
 except FileNotFoundError:
-    st.error("🚨 Error: The file 'Samsung Dialog.txt' was not found. Please place it in the root of your repository.")
+    st.error("🚨 Error: The file 'Samsung Dialog.txt' was not found. Please place it in the same directory as the script.")
     st.stop()
 
 cust = data.loc[data['Speaker'] == 'Customer', 'Line'].reset_index(drop=True)
@@ -72,9 +42,6 @@ new_data = pd.DataFrame({'Question': cust, 'Answer': sales})
 
 # --- Define Text Preprocessing Function ---
 def preprocess_text(text):
-    if pd.isna(text) or not isinstance(text, str):
-        return "" # Handle NaN or non-string inputs gracefully
-
     sentences = nltk.sent_tokenize(text)
     preprocessed_sentences = []
     for sentence in sentences:
@@ -111,17 +78,21 @@ human_exit = ['thank you', 'thanks', 'bye', 'goodbye', 'quit']
 # --- Define Speech Transcription Function ---
 def transcribe_speech(language_code="en-US"):
     r = sr.Recognizer()
+    # Note: On Streamlit Cloud, the Microphone feature often requires client-side workarounds
+    # and system dependencies (like portaudio19-dev in packages.txt)
     with sr.Microphone() as source:
         st.info("🎙️ Speak now... (Keep it short)")
-        r.adjust_for_ambient_noise(source, duration=1)
+        # This line helps to cut out ambient noise before listening starts
+        r.adjust_for_ambient_noise(source, duration=1) 
         try:
-            audio = r.listen(source, timeout=5)
+            # Add a timeout to prevent the app from hanging indefinitely
+            audio = r.listen(source, timeout=5) 
             st.info("📝 Transcribing your voice...")
             text = r.recognize_google(audio, language=language_code)
             st.success(f"✅ Transcription complete: {text}")
             return text
         except sr.WaitTimeoutError:
-             st.error("❌ No speech detected after 5 seconds. Please try again.")
+             st.error("❌ No speech detected after timeout. Please click the button and try again.")
              return None
         except sr.UnknownValueError:
             st.error("❌ Sorry, I could not understand your voice. Please try again.")
@@ -130,7 +101,8 @@ def transcribe_speech(language_code="en-US"):
             st.error("⚠️ Could not reach the speech recognition service. Check your internet connection.")
             return None
         except Exception as e:
-            st.error(f"⚠️ An audio error occurred. Check PyAudio installation: {e}")
+            # Catch other potential audio-related errors
+            st.error(f"⚠️ An audio error occurred: {e}")
             return None
 
 # --- Streamlit UI ---
@@ -141,11 +113,7 @@ st.markdown("---")
 st.write("This chatbot can respond to your text or speech questions based on a company FAQ file. "
          "You can either type your question or click the button to speak.")
 
-# Use a session state variable to ensure the radio button maintains state
-if 'input_type' not in st.session_state:
-    st.session_state.input_type = "Text"
-
-input_type = st.radio("Choose your input method:", ["Text", "Speech"], key='input_type')
+input_type = st.radio("Choose your input method:", ["Text", "Speech"], key='input_radio')
 
 user_input = None
 
@@ -187,10 +155,8 @@ if user_input:
             
             # Optional: Add a threshold to reject low-confidence answers
             max_score = similarity_scores[0, most_similar_index]
-            
-            # Use a slightly lower threshold for robustness, e.g., 0.15
-            if max_score < 0.15: 
-                 response = "I couldn't find a close answer in my knowledge base. Could you rephrase your question?"
+            if max_score < 0.2: # Example low-confidence threshold
+                 response = "I'm not sure I understand that question. Could you rephrase it or ask something different?"
             else:
                 # 5. Get the corresponding answer
                 response = new_data['Answer'].iloc[most_similar_index]

@@ -1,33 +1,32 @@
 # --- Import Required Libraries ---
 import streamlit as st
 import pandas as pd
-import numpy as np # <-- MISSING
 import nltk
 import os
-import random # <-- MISSING
-import time # <-- MISSING
-import ssl # <-- MISSING (Needed for the fix below)
 import speech_recognition as sr
-from sklearn.feature_extraction.text import TfidfVectorizer # <-- MISSING
-from sklearn.metrics.pairwise import cosine_similarity # <-- MISSING
-from nltk.tokenize import word_tokenize # This is fine
-from nltk.corpus import stopwords # This is fine
-from nltk.stem import WordNetLemmatizer # This is fine
-# from nltk.tokenize import sent_tokenize # Optional: You can import this too
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 
 # ============================
 # 1. Ensure Required NLTK Data is Available
 # ============================
 nltk_packages = [
     "punkt",
+    "punkt_tab",
     "stopwords",
-    "wordnet"
+    "wordnet",
+    "omw-1.4"
 ]
 
-# ========================================================================
-# 1. FIX: Consolidated and Corrected NLTK Downloads for Deployment
-# ========================================================================
-# Temporarily bypass SSL verification to prevent download failures on some cloud environments
+for pkg in nltk_packages:
+    try:
+        nltk.data.find(f"tokenizers/{pkg}")
+    except LookupError:
+        nltk.download(pkg)
+
+# --- FIX: NLTK Download Resources for Deployment ---
+# Temporarily bypass SSL verification for NLTK downloads (common cloud fix)
 try:
     _create_unverified_https_context = ssl._create_unverified_context
 except AttributeError:
@@ -35,24 +34,18 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-# Force the downloads of the actual required packages
+# Force the downloads to run to prevent LookupError
 try:
-    # 'punkt' for sent_tokenize/word_tokenize
-    nltk.download('punkt', quiet=True, force=True) 
-    
-    # 'wordnet' and 'omw-1.4' for WordNetLemmatizer
+    # Use force=True to ensure the files are downloaded and found in the environment
+    nltk.download('punkt', quiet=True, force=True)
     nltk.download('wordnet', quiet=True, force=True)
-    nltk.download('omw-1.4', quiet=True, force=True) 
-    
-    # 'stopwords' for filtering (if you use it)
-    nltk.download('stopwords', quiet=True, force=True)
-    
 except Exception as e:
     st.error(f"🚨 NLTK Download Failed: {e}")
     st.stop()
 
 # --- Initialize Lemmatizer ---
 lemmatizer = WordNetLemmatizer()
+
 # --- Load and Prepare Data ---
 # Ensure 'Samsung Dialog.txt' is in the same directory as this script.
 try:
