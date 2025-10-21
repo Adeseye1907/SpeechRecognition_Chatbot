@@ -11,7 +11,7 @@ import os  # CRITICAL: Needed for the NLTK path fix below
 from sklearn.feature_extraction.text import TfidfVectorizer # CRITICAL: Added missing import
 from sklearn.metrics.pairwise import cosine_similarity # CRITICAL: Added missing import
 from nltk.stem import WordNetLemmatizer
-
+from nltk.stem import WordNetLemmatizer
 
 # ========================================================================
 # 1. FINAL FIX: Robust NLTK Data Download and Path Configuration (LookupError Fix)

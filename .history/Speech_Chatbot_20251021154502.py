@@ -1,29 +1,47 @@
 # --- Import Required Libraries ---
 import streamlit as st
 import pandas as pd
-import numpy as np # CRITICAL: Added missing import
+import numpy as np # <-- MISSING
 import nltk
-import random # CRITICAL: Added missing import
-import time
+import os
+import random # <-- MISSING
+import time # <-- MISSING
+import ssl # <-- MISSING (Needed for the fix below)
 import speech_recognition as sr
-import ssl # CRITICAL: Needed for the NLTK fix below
-import os  # CRITICAL: Needed for the NLTK path fix below
-from sklearn.feature_extraction.text import TfidfVectorizer # CRITICAL: Added missing import
-from sklearn.metrics.pairwise import cosine_similarity # CRITICAL: Added missing import
-from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer # <-- MISSING
+from sklearn.metrics.pairwise import cosine_similarity # <-- MISSING
+from nltk.tokenize import word_tokenize # This is fine
+from nltk.corpus import stopwords # This is fine
+from nltk.stem import WordNetLemmatizer # This is fine
+# from nltk.tokenize import sent_tokenize # Optional: You can import this too
 
+# ============================
+# 1. Ensure Required NLTK Data is Available
+# ============================
+nltk_packages = [
+    "punkt",
+    "stopwords",
+    "wordnet"
+]
+# --- NLTK Imports (Ensure 'os' and 'ssl' are imported at the very top) ---
+import nltk
+import ssl
+import os 
+# ... other imports ...
 
 # ========================================================================
-# 1. FINAL FIX: Robust NLTK Data Download and Path Configuration (LookupError Fix)
+# 1. FINAL FIX: Robust NLTK Data Download and Path Configuration
 # ========================================================================
 
-# Define a guaranteed-writable directory for NLTK data on Streamlit Cloud
-NLTK_DATA_DIR = "/tmp/nltk_data"
-if NLTK_DATA_DIR not in nltk.data.path:
-    nltk.data.path.append(NLTK_DATA_DIR)
-os.makedirs(NLTK_DATA_DIR, exist_ok=True)
+# 1. Set a consistent, writable NLTK data path (often fixes cloud path issues)
+# This path is usually writable on Streamlit Cloud
+nltk_data_path = "/tmp/nltk_data"
+if nltk_data_path not in nltk.data.path:
+    nltk.data.path.append(nltk_data_path)
+os.makedirs(nltk_data_path, exist_ok=True)
 
-# SSL Fix for download stability (prevents connection errors)
+
+# 2. SSL Fix (Keep this, it's necessary for the download process itself)
 try:
     _create_unverified_https_context = ssl._create_unverified_context
 except AttributeError:
@@ -31,23 +49,24 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
-# Force all necessary downloads to the custom path
-try:
-    nltk.download('punkt', download_dir=NLTK_DATA_DIR, quiet=True, force=True) 
-    nltk.download('wordnet', download_dir=NLTK_DATA_DIR, quiet=True, force=True)
-    nltk.download('stopwords', download_dir=NLTK_DATA_DIR, quiet=True, force=True)
-    nltk.download('omw-1.4', download_dir=NLTK_DATA_DIR, quiet=True, force=True)
 
-    # Sanity check: Ensure the resource is found to prevent the LookupError
+# 3. Force Downloads to the Writable Path
+try:
+    # Use download_dir to force installation to the correct path
+    nltk.download('punkt', download_dir=nltk_data_path, quiet=True, force=True) 
+    nltk.download('wordnet', download_dir=nltk_data_path, quiet=True, force=True)
+    nltk.download('stopwords', download_dir=nltk_data_path, quiet=True, force=True) 
+    nltk.download('omw-1.4', download_dir=nltk_data_path, quiet=True, force=True)
+
+    # CRITICAL: Verify the resource is found in the path we set
     nltk.data.find('tokenizers/punkt')
 
 except Exception as e:
-    st.error(f"🚨 Final NLTK Resource Error: Cannot locate essential data. Error: {e}")
+    st.error(f"🚨 NLTK Download Failed: Cannot locate essential data. Error: {e}")
     st.stop()
 
 # --- Initialize Lemmatizer ---
 lemmatizer = WordNetLemmatizer()
-
 # --- Load and Prepare Data ---
 # Ensure 'Samsung Dialog.txt' is in the same directory as this script.
 try:
@@ -68,13 +87,12 @@ new_data = pd.DataFrame({'Question': cust, 'Answer': sales})
 # --- Define Text Preprocessing Function ---
 def preprocess_text(text):
     if pd.isna(text) or not isinstance(text, str):
-        return "" 
+        return "" # Handle NaN or non-string inputs gracefully
 
-    # This call relies on the 'punkt' download above
-    sentences = nltk.sent_tokenize(text) 
+    sentences = nltk.sent_tokenize(text)
     preprocessed_sentences = []
     for sentence in sentences:
-        # This call relies on the 'punkt' download above
+        # Use str.isalnum() to filter out most punctuation
         tokens = [lemmatizer.lemmatize(word.lower()) for word in nltk.word_tokenize(sentence) if word.isalnum()]
         preprocessed_sentence = ' '.join(tokens)
         preprocessed_sentences.append(preprocessed_sentence)
